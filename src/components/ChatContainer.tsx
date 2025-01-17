@@ -21,15 +21,15 @@ const ChatContainer = () => {
 
   useEffect(() => {
     if (authUser) {
-      getMessages(selectedUser._id);
-      subscribeToMessages();
+      getMessages(selectedUser._id); // Fetch messages for the selected user
+      subscribeToMessages(); // Start listening for new messages
 
-      return () => unsubscribeFromMessages();
+      return () => unsubscribeFromMessages(); // Cleanup: Stop listening on unmount
     }
   }, [
-    selectedUser._id,
+    selectedUser._id, // Rerun when the selected user changes
     getMessages,
-    authUser,
+    authUser, // Ensure the effect only runs when the authenticated user is available
     subscribeToMessages,
     unsubscribeFromMessages,
   ]);
