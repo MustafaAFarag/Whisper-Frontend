@@ -63,9 +63,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const response = await axiosInstance.get<AuthUser>("/auth/check");
       set({ authUser: response.data });
       get().connectSocket();
-    } catch (error) {
-      console.error(`Error in checkAuth: ${error}`);
-      set({ authUser: null });
+    } catch (error: any) {
+      if (error?.response?.status === 401) {
+        // Clear any stored auth state when unauthorized
+        set({ authUser: null });
+        localStorage.removeItem("token"); // If you're storing the token in localStorage
+
+        // Optional: Redirect to login page if using React Router
+        // window.location.href = '/login';
+      }
+      console.error(`Error in checkAuth:`, error?.response?.data || error);
     } finally {
       set({ isCheckingAuth: false });
     }
@@ -78,10 +85,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ authUser: response.data });
       toast.success("Account Created Successfully");
       get().connectSocket();
-    } catch (error) {
+    } catch (error: any) {
       const errorMessage =
-        (error as any)?.response?.data?.message || "An error occurred";
+        error?.response?.data?.message || "Failed to create account";
       toast.error(errorMessage);
+      throw error; // Propagate error to component for handling
     } finally {
       set({ isSigningUp: false });
     }
@@ -93,10 +101,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const response = await axiosInstance.post<AuthUser>("/auth/login", data);
       set({ authUser: response.data });
       get().connectSocket();
-    } catch (error) {
+    } catch (error: any) {
       const errorMessage =
-        (error as any)?.response?.data?.message || "An error occurred";
+        error?.response?.data?.message || "Invalid credentials";
       toast.error(errorMessage);
+      throw error; // Propagate error to component for handling
     } finally {
       set({ isLoggingIn: false });
     }
@@ -105,13 +114,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     try {
       await axiosInstance.post("/auth/logout");
-      set({ authUser: null });
-      toast.success("Logged out Successfully");
+      // Clear all auth-related state
+      set({
+        authUser: null,
+        onlineUsers: [],
+      });
+      localStorage.removeItem("token"); // If you're storing the token in localStorage
       get().disconnectSocket();
-    } catch (error) {
+      toast.success("Logged out Successfully");
+    } catch (error: any) {
       const errorMessage =
-        (error as any)?.response?.data?.message || "An error occurred";
+        error?.response?.data?.message || "Error logging out";
       toast.error(errorMessage);
+      // Force logout on frontend even if backend call fails
+      set({ authUser: null, onlineUsers: [] });
+      get().disconnectSocket();
     }
   },
 
@@ -124,9 +141,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       );
       set({ authUser: response.data });
       toast.success("Profile updated Successfully");
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.response?.status === 401) {
+        // Handle unauthorized error
+        get().logout();
+        toast.error("Session expired. Please login again.");
+        return;
+      }
       const errorMessage =
-        (error as any)?.response?.data?.message || "An error occurred";
+        error?.response?.data?.message || "Failed to update profile";
       toast.error(errorMessage);
     } finally {
       set({ isUpdatingProfile: false });
@@ -141,7 +164,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       query: {
         userId: authUser._id,
       },
+      auth: {
+        token: localStorage.getItem("token"), // If you're using token-based auth
+      },
     });
+
+    socket.on("connect_error", (error) => {
+      console.error("Socket connection error:", error);
+      if (error.message === "unauthorized") {
+        get().logout();
+      }
+    });
+
     socket.connect();
     set({ socket: socket });
 
@@ -151,8 +185,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   disconnectSocket: () => {
-    if (get().socket?.connected) {
-      get().socket?.disconnect();
+    const socket = get().socket;
+    if (socket?.connected) {
+      socket.disconnect();
+      set({ socket: null });
     }
   },
 }));
