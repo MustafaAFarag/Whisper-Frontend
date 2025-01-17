@@ -77,9 +77,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
   subscribeToMessages: () => {
     const { selectedUser } = get();
-    if (!selectedUser) return;
 
     const socket = useAuthStore.getState().socket;
+
+    if (!selectedUser || !socket) return; // Ensure both selectedUser and socket exist
 
     socket?.on("newMessage", (newMessage) => {
       const isMessageSentFromSelectedUser =
