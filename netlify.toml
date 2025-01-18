@@ -2,4 +2,4 @@
   for = "/*"
   [headers.values]
     Access-Control-Allow-Credentials = "true"
-    Access-Control-Allow-Origin = "https://whisper-backend-production.up.railway.app"
+    Access-Control-Allow-Origin = "https://chatapp-whisper.netlify.app"  
